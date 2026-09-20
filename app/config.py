@@ -28,6 +28,11 @@ class Settings:
         self.telegram_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
         self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
         self.cron_secret = os.getenv("CRON_SECRET", "")
+        self.dry_run = os.getenv("DRY_RUN", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        )
 
     @property
     def holding_symbols(self):

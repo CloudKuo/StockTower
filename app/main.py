@@ -1,7 +1,7 @@
 import requests
 from fastapi import FastAPI, Header, HTTPException, Request
-
 from app.config import get_settings
+from app.market import is_trading_day
 from app.pnl import analyze_portfolio
 from app.quotes import QuoteError, get_prices
 from app.render import render_report
@@ -10,11 +10,13 @@ from app.telegram import TelegramClient
 app = FastAPI(title="StockTower")
 settings = get_settings()
 
+
 def build_report():
     prices = get_prices(
-        settings.holding_symbols,
+        settings.portfolio,
         settings.fubon_api_key,
         settings.fubon_secret_key,
+        dry_run=settings.dry_run,
     )
     report = analyze_portfolio(settings.portfolio, prices, settings.strategy)
     return report, render_report(report)
@@ -40,6 +42,8 @@ def healthz():
 def cron(x_cron_secret: str = Header(default="")):
     if settings.cron_secret and x_cron_secret != settings.cron_secret:
         raise HTTPException(status_code=403, detail="forbidden")
+    if not is_trading_day():
+        return {"skipped": True, "reason": "非台股交易日，略過推播"}
     result = run_pipeline()
     return {"sent": result["sent"], "summary": result["report"].message}
 

@@ -18,3 +18,5 @@ services:
         sync: false
       - key: CRON_SECRET
         sync: false
+      - key: DRY_RUN
+        value: "true"

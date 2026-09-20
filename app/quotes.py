@@ -1,6 +1,10 @@
+from hashlib import sha256
+
 from fubon_neo.sdk import FubonSDK
 
 PRICE_FIELDS = ("lastPrice", "closePrice", "referencePrice", "previousClose")
+
+MOCK_FACTORS = (0.92, 0.98, 1.05, 1.12, 0.88, 1.18)
 
 
 class QuoteError(Exception):
@@ -32,7 +36,22 @@ def _extract_price(result):
     return None
 
 
-def get_prices(symbols, api_key, secret_key):
+def _mock_prices(portfolio):
+    prices = {}
+    for idx, item in enumerate(portfolio):
+        symbol = item["symbol"]
+        avg_cost = float(item["avg_cost"])
+        digest = sha256(symbol.encode()).hexdigest()
+        jitter = (int(digest[:8], 16) % 100) / 1000 - 0.05
+        factor = MOCK_FACTORS[idx % len(MOCK_FACTORS)] + jitter
+        prices[symbol] = round(avg_cost * factor, 2)
+    return prices
+
+
+def get_prices(portfolio, api_key, secret_key, dry_run=False):
+    if dry_run:
+        return _mock_prices(portfolio)
+
     if not api_key or not secret_key:
         raise QuoteError("FUBON_API_KEY / FUBON_SECRET_KEY 未設定")
 
@@ -44,6 +63,7 @@ def get_prices(symbols, api_key, secret_key):
     sdk.init_realtime()
     stock = sdk.marketdata.rest_client.stock
 
+    symbols = [item["symbol"] for item in portfolio]
     prices = {}
     for symbol in symbols:
         try:
