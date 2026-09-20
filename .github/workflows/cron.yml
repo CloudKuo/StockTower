@@ -1,0 +1,17 @@
+name: StockTower 排程推播
+
+on:
+  schedule:
+    - cron: "5 1 * * 1-5"
+    - cron: "30 3 * * 1-5"
+    - cron: "35 5 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  trigger-cron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 呼叫後端 /api/cron
+        run: |
+          curl -sS -f -X POST "${{ secrets.STOCKTOWER_URL }}/api/cron" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"

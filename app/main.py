@@ -1,0 +1,74 @@
+import requests
+from fastapi import FastAPI, Header, HTTPException, Request
+
+from app.config import get_settings
+from app.pnl import analyze_portfolio
+from app.quotes import QuoteError, get_prices
+from app.render import render_report
+from app.telegram import TelegramClient
+
+app = FastAPI(title="StockTower")
+settings = get_settings()
+
+def build_report():
+    prices = get_prices(
+        settings.holding_symbols,
+        settings.fubon_api_key,
+        settings.fubon_secret_key,
+    )
+    report = analyze_portfolio(settings.portfolio, prices, settings.strategy)
+    return report, render_report(report)
+
+
+def run_pipeline():
+    report, text = build_report()
+    try:
+        sent = TelegramClient(
+            settings.telegram_token, settings.telegram_chat_id
+        ).send(text)
+    except ValueError:
+        sent = False
+    return {"report": report, "message": text, "sent": sent}
+
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok", "symbols": settings.holding_symbols}
+
+
+@app.post("/api/cron")
+def cron(x_cron_secret: str = Header(default="")):
+    if settings.cron_secret and x_cron_secret != settings.cron_secret:
+        raise HTTPException(status_code=403, detail="forbidden")
+    result = run_pipeline()
+    return {"sent": result["sent"], "summary": result["report"].message}
+
+
+@app.post("/api/telegram")
+async def telegram_webhook(
+    request: Request,
+    x_telegram_bot_api_secret_token: str = Header(default=""),
+):
+    allowed_chat_ids = settings.telegram_chat_id.split(",")
+    payload = await request.json()
+    chat_id = str(payload.get("message", {}).get("chat", {}).get("id", ""))
+    if chat_id not in allowed_chat_ids:
+        raise HTTPException(status_code=403, detail="forbidden")
+    command = payload.get("message", {}).get("text", "").strip().lower()
+
+    if command == "/pnl":
+        try:
+            report, text = build_report()
+            TelegramClient(settings.telegram_token, chat_id).send(text)
+        except QuoteError as exc:
+            TelegramClient(settings.telegram_token, chat_id).send(f"查詢失敗：{exc}")
+    elif command in ("/start", "/help"):
+        TelegramClient(
+            settings.telegram_token, chat_id
+        ).send("可用指令：\n/pnl - 查詢即時庫存損益")
+    return {"ok": True}
+
+
+@app.get("/")
+def root():
+    return {"service": "StockTower", "usage": "POST /api/cron, POST /api/telegram"}
