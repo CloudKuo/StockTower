@@ -40,6 +40,22 @@ def healthz():
     return {"status": "ok", "symbols": settings.holding_symbols}
 
 
+@app.get("/status")
+def status():
+    return {
+        "dry_run": settings.dry_run,
+        "fubon_id_set": bool(settings.fubon_id),
+        "fubon_api_key_set": bool(settings.fubon_api_key),
+        "fubon_cert_pass_set": bool(settings.fubon_cert_pass),
+        "fubon_cert_b64_set": bool(settings.fubon_cert_b64),
+        "fubon_cert_path": settings.fubon_cert_path,
+        "telegram_chat_ids": [
+            cid.strip() for cid in settings.telegram_chat_id.split(",") if cid.strip()
+        ],
+        "symbols": settings.holding_symbols,
+    }
+
+
 @app.post("/api/cron")
 def cron(x_cron_secret: str = Header(default="")):
     if settings.cron_secret and x_cron_secret != settings.cron_secret:
