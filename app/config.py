@@ -23,8 +23,11 @@ class Settings:
         self.push_schedule = self.config.get("telegram", {}).get(
             "push_schedule", ["09:05", "11:30", "13:35"]
         )
+        self.fubon_id = os.getenv("FUBON_ID", "")
         self.fubon_api_key = os.getenv("FUBON_API_KEY", "")
-        self.fubon_secret_key = os.getenv("FUBON_SECRET_KEY", "")
+        self.fubon_cert_path = os.getenv("FUBON_CERT_PATH", "/tmp/fubon_cert.pfx")
+        self.fubon_cert_pass = os.getenv("FUBON_CERT_PASS", "")
+        self.fubon_cert_b64 = os.getenv("FUBON_CERT_B64", "")
         self.telegram_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
         self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
         self.cron_secret = os.getenv("CRON_SECRET", "")

@@ -12,12 +12,14 @@ settings = get_settings()
 
 
 def build_report():
-    prices = get_prices(
-        settings.portfolio,
-        settings.fubon_api_key,
-        settings.fubon_secret_key,
-        dry_run=settings.dry_run,
-    )
+    credentials = {
+        "FUBON_ID": settings.fubon_id,
+        "FUBON_API_KEY": settings.fubon_api_key,
+        "FUBON_CERT_PATH": settings.fubon_cert_path,
+        "FUBON_CERT_PASS": settings.fubon_cert_pass,
+        "FUBON_CERT_B64": settings.fubon_cert_b64,
+    }
+    prices = get_prices(settings.portfolio, credentials, dry_run=settings.dry_run)
     report = analyze_portfolio(settings.portfolio, prices, settings.strategy)
     return report, render_report(report)
 

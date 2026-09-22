@@ -8,10 +8,16 @@ services:
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port 10000
     healthCheckPath: /healthz
     envVars:
+      - key: FUBON_ID
+        sync: false
       - key: FUBON_API_KEY
         sync: false
-      - key: FUBON_SECRET_KEY
+      - key: FUBON_CERT_PASS
         sync: false
+      - key: FUBON_CERT_B64
+        sync: false
+      - key: FUBON_CERT_PATH
+        value: /tmp/fubon_cert.pfx
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_CHAT_ID

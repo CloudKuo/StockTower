@@ -1,4 +1,6 @@
+import base64
 from hashlib import sha256
+from pathlib import Path
 
 from fubon_neo.sdk import FubonSDK
 
@@ -36,6 +38,15 @@ def _extract_price(result):
     return None
 
 
+def _ensure_cert(cert_b64, cert_path):
+    path = Path(cert_path)
+    if path.exists() and path.stat().st_size > 0:
+        return
+    if not cert_b64:
+        raise QuoteError("FUBON_CERT_B64 未設定（憑證需以 base64 存放在環境變數）")
+    path.write_bytes(base64.b64decode(cert_b64))
+
+
 def _mock_prices(portfolio):
     prices = {}
     for idx, item in enumerate(portfolio):
@@ -48,17 +59,32 @@ def _mock_prices(portfolio):
     return prices
 
 
-def get_prices(portfolio, api_key, secret_key, dry_run=False):
+def get_prices(portfolio, credentials, dry_run=False):
     if dry_run:
         return _mock_prices(portfolio)
 
-    if not api_key or not secret_key:
-        raise QuoteError("FUBON_API_KEY / FUBON_SECRET_KEY 未設定")
+    required = {
+        "FUBON_ID": credentials["FUBON_ID"],
+        "FUBON_API_KEY": credentials["FUBON_API_KEY"],
+        "FUBON_CERT_PASS": credentials["FUBON_CERT_PASS"],
+    }
+    missing = [name for name, value in required.items() if not value]
+    if missing:
+        raise QuoteError(f"{', '.join(missing)} 未設定")
+
+    cert_path = credentials["FUBON_CERT_PATH"] or "/tmp/fubon_cert.pfx"
+    _ensure_cert(credentials["FUBON_CERT_B64"], cert_path)
 
     sdk = FubonSDK()
-    accounts = sdk.login(api_key, secret_key)
-    if not accounts:
-        raise QuoteError("富邦登入失敗，請檢查 API Key")
+    result = sdk.apikey_login(
+        credentials["FUBON_ID"],
+        credentials["FUBON_API_KEY"],
+        cert_path,
+        credentials["FUBON_CERT_PASS"],
+    )
+    if not result or not getattr(result, "is_success", False):
+        message = getattr(result, "message", None) or "無回傳帳戶"
+        raise QuoteError(f"富邦登入失敗：{message}")
 
     sdk.init_realtime()
     stock = sdk.marketdata.rest_client.stock
