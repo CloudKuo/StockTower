@@ -65,10 +65,11 @@ def get_prices(portfolio, credentials, dry_run=False):
 
     required = {
         "FUBON_ID": credentials["FUBON_ID"],
-        "FUBON_API_KEY": credentials["FUBON_API_KEY"],
         "FUBON_CERT_PASS": credentials["FUBON_CERT_PASS"],
     }
     missing = [name for name, value in required.items() if not value]
+    if not credentials.get("FUBON_PASSWORD") and not credentials.get("FUBON_API_KEY"):
+        missing.append("FUBON_PASSWORD 或 FUBON_API_KEY")
     if missing:
         raise QuoteError(f"{', '.join(missing)} 未設定")
 
@@ -76,12 +77,20 @@ def get_prices(portfolio, credentials, dry_run=False):
     _ensure_cert(credentials["FUBON_CERT_B64"], cert_path)
 
     sdk = FubonSDK()
-    result = sdk.apikey_login(
-        credentials["FUBON_ID"],
-        credentials["FUBON_API_KEY"],
-        cert_path,
-        credentials["FUBON_CERT_PASS"],
-    )
+    if credentials.get("FUBON_PASSWORD"):
+        result = sdk.login(
+            credentials["FUBON_ID"],
+            credentials["FUBON_PASSWORD"],
+            cert_path,
+            credentials["FUBON_CERT_PASS"],
+        )
+    else:
+        result = sdk.apikey_login(
+            credentials["FUBON_ID"],
+            credentials["FUBON_API_KEY"],
+            cert_path,
+            credentials["FUBON_CERT_PASS"],
+        )
     if not result or not getattr(result, "is_success", False):
         message = getattr(result, "message", None) or "無回傳帳戶"
         raise QuoteError(f"富邦登入失敗：{message}")

@@ -15,6 +15,7 @@ def build_report():
     credentials = {
         "FUBON_ID": settings.fubon_id,
         "FUBON_API_KEY": settings.fubon_api_key,
+        "FUBON_PASSWORD": settings.fubon_password,
         "FUBON_CERT_PATH": settings.fubon_cert_path,
         "FUBON_CERT_PASS": settings.fubon_cert_pass,
         "FUBON_CERT_B64": settings.fubon_cert_b64,
@@ -46,6 +47,7 @@ def status():
         "dry_run": settings.dry_run,
         "fubon_id_set": bool(settings.fubon_id),
         "fubon_api_key_set": bool(settings.fubon_api_key),
+        "fubon_password_set": bool(settings.fubon_password),
         "fubon_cert_pass_set": bool(settings.fubon_cert_pass),
         "fubon_cert_b64_set": bool(settings.fubon_cert_b64),
         "fubon_cert_path": settings.fubon_cert_path,

@@ -5,7 +5,7 @@ PORTFOLIO = [
     {"symbol": "2409", "name": "友達", "shares": 2000, "avg_cost": 18.5},
 ]
 
-EMPTY_CREDS = {k: "" for k in ("FUBON_ID", "FUBON_API_KEY", "FUBON_CERT_PATH", "FUBON_CERT_PASS", "FUBON_CERT_B64")}
+EMPTY_CREDS = {k: "" for k in ("FUBON_ID", "FUBON_API_KEY", "FUBON_PASSWORD", "FUBON_CERT_PATH", "FUBON_CERT_PASS", "FUBON_CERT_B64")}
 
 
 def test_flat_response():
@@ -50,6 +50,7 @@ def test_missing_credentials_raise():
         get_prices(PORTFOLIO, EMPTY_CREDS)
     except Exception as exc:
         assert "未設定" in str(exc)
+        assert "FUBON_PASSWORD" in str(exc)
     else:
         raise AssertionError("expected QuoteError")
 
@@ -69,3 +70,67 @@ def test_ensure_cert_missing_b64_raises(tmp_path):
         assert "FUBON_CERT_B64" in str(exc)
     else:
         raise AssertionError("expected QuoteError")
+
+
+class _FakeStock:
+    def intraday(self):
+        return type("Q", (), {"quote": lambda self, symbol: {"lastPrice": 100}})()
+
+
+class _FakeRestClient:
+    stock = type("S", (), {"intraday": lambda self: _FakeStock()})()
+
+
+class _FakeSDK:
+    def __init__(self):
+        self.call = None
+
+    def login(self, *args):
+        self.call = ("login", args)
+        return type("R", (), {"is_success": True, "message": None})()
+
+    def apikey_login(self, *args):
+        self.call = ("apikey_login", args)
+        return type("R", (), {"is_success": True, "message": None})()
+
+    def init_realtime(self):
+        pass
+
+    @property
+    def marketdata(self):
+        return type("M", (), {"rest_client": _FakeRestClient})()
+
+
+def test_password_login_preferred(monkeypatch, tmp_path):
+    import app.quotes as quotes
+
+    fake = _FakeSDK()
+    monkeypatch.setattr(quotes, "FubonSDK", lambda: fake)
+    monkeypatch.setattr(quotes, "_ensure_cert", lambda *args: None)
+    creds = {
+        **EMPTY_CREDS,
+        "FUBON_ID": "F1",
+        "FUBON_PASSWORD": "pw",
+        "FUBON_CERT_PASS": "cp",
+    }
+    prices = get_prices(PORTFOLIO, creds)
+    assert fake.call[0] == "login"
+    assert fake.call[1][0] == "F1"
+    assert set(prices) == {"2330", "2409"}
+
+
+def test_apikey_login_fallback(monkeypatch, tmp_path):
+    import app.quotes as quotes
+
+    fake = _FakeSDK()
+    monkeypatch.setattr(quotes, "FubonSDK", lambda: fake)
+    monkeypatch.setattr(quotes, "_ensure_cert", lambda *args: None)
+    creds = {
+        **EMPTY_CREDS,
+        "FUBON_ID": "F1",
+        "FUBON_API_KEY": "StockTowerAPIKey",
+        "FUBON_CERT_PASS": "cp",
+    }
+    get_prices(PORTFOLIO, creds)
+    assert fake.call[0] == "apikey_login"
+    assert fake.call[1][1] == "StockTowerAPIKey"

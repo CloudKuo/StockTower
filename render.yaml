@@ -12,6 +12,8 @@ services:
         sync: false
       - key: FUBON_API_KEY
         sync: false
+      - key: FUBON_PASSWORD
+        sync: false
       - key: FUBON_CERT_PASS
         sync: false
       - key: FUBON_CERT_B64

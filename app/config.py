@@ -25,6 +25,7 @@ class Settings:
         )
         self.fubon_id = os.getenv("FUBON_ID", "")
         self.fubon_api_key = os.getenv("FUBON_API_KEY", "")
+        self.fubon_password = os.getenv("FUBON_PASSWORD", "")
         self.fubon_cert_path = os.getenv("FUBON_CERT_PATH", "/tmp/fubon_cert.pfx")
         self.fubon_cert_pass = os.getenv("FUBON_CERT_PASS", "")
         self.fubon_cert_b64 = os.getenv("FUBON_CERT_B64", "")
