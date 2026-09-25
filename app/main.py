@@ -49,6 +49,7 @@ def status():
         "fubon_cert_pass_set": bool(settings.fubon_cert_pass),
         "fubon_cert_b64_set": bool(settings.fubon_cert_b64),
         "fubon_cert_path": settings.fubon_cert_path,
+        "cron_secret_set": bool(settings.cron_secret),
         "telegram_chat_ids": [
             cid.strip() for cid in settings.telegram_chat_id.split(",") if cid.strip()
         ],

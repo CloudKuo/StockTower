@@ -12,6 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 呼叫後端 /api/cron
+        env:
+          STOCKTOWER_URL: "${{ secrets.STOCKTOWER_URL }}"
         run: |
-          curl -sS -f -X POST "${{ secrets.STOCKTOWER_URL }}/api/cron" \
+          url="${STOCKTOWER_URL:-https://stocktower.onrender.com}"
+          curl -sS -f -X POST "$url/api/cron" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
