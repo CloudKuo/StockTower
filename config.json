@@ -2,7 +2,7 @@
   "telegram": {
     "push_schedule": ["09:05"]
   },
-  "holdings_file": "data/holdings.json",
+  "holdings_dir": "data/holdings",
   "strategy": {
     "take_profit_pct": 10,
     "stop_loss_pct": -8,

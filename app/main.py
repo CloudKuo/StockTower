@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Header, HTTPException, Request
 
-from app.config import get_settings, load_holdings, save_holdings
+from app.config import get_settings
 from app.market import is_trading_day
 from app.pnl import analyze_portfolio
 from app.quotes import QuoteError, get_prices
@@ -11,8 +11,8 @@ app = FastAPI(title="StockTower")
 settings = get_settings()
 
 
-def build_report():
-    portfolio = settings.portfolio
+def build_report(chat_id):
+    portfolio = settings.load_holdings(chat_id)
     if not portfolio:
         return None, "目前尚無庫存。請用 /add 代號 名稱 股數 成本 新增，例如：\n/add 2330 台積電 1000 580"
     prices = get_prices(portfolio, dry_run=settings.dry_run)
@@ -20,19 +20,15 @@ def build_report():
     return report, render_report(report)
 
 
-def run_pipeline():
-    report, text = build_report()
+def run_pipeline(chat_id):
+    report, text = build_report(chat_id)
     if report is None:
         return {"report": None, "message": text, "sent": False}
     try:
-        sent = TelegramClient(settings.telegram_token, settings.telegram_chat_id).send(text)
+        sent = TelegramClient(settings.telegram_token, chat_id).send(text)
     except ValueError:
         sent = False
     return {"report": report, "message": text, "sent": sent}
-
-
-def _allowed_chat_ids():
-    return [cid.strip() for cid in settings.telegram_chat_id.split(",") if cid.strip()]
 
 
 def _normalize_command(text):
@@ -45,7 +41,6 @@ def _normalize_command(text):
 
 
 def _parse_add(args):
-    # /add 2330 台積電 1000 580  or /add 2330 1000 580
     if len(args) < 3:
         raise ValueError("格式：/add 代號 名稱 股數 成本 或 /add 代號 股數 成本")
     symbol = args[0].strip()
@@ -63,7 +58,7 @@ def _parse_add(args):
 
 
 def _handle_command(command, args, chat_id):
-    holdings = load_holdings(settings.holdings_path)
+    holdings = settings.load_holdings(chat_id)
 
     if command == "/add":
         item = _parse_add(args)
@@ -75,7 +70,7 @@ def _handle_command(command, args, chat_id):
                 break
         if not replaced:
             holdings.append(item)
-        save_holdings(settings.holdings_path, holdings)
+        settings.save_holdings(chat_id, holdings)
         action = "更新" if replaced else "新增"
         return f"已{action} {item['name']}({item['symbol']}) {item['shares']} 股，成本 {item['avg_cost']}"
 
@@ -86,7 +81,7 @@ def _handle_command(command, args, chat_id):
         new_holdings = [h for h in holdings if h["symbol"] != symbol]
         if len(new_holdings) == len(holdings):
             return f"找不到 {symbol}"
-        save_holdings(settings.holdings_path, new_holdings)
+        settings.save_holdings(chat_id, new_holdings)
         return f"已移除 {symbol}"
 
     if command == "/list":
@@ -99,7 +94,7 @@ def _handle_command(command, args, chat_id):
 
     if command == "/pnl":
         try:
-            _, text = build_report()
+            _, text = build_report(chat_id)
             return text
         except QuoteError as exc:
             return f"查詢失敗：{exc}"
@@ -117,17 +112,18 @@ def _handle_command(command, args, chat_id):
 
 @app.get("/healthz")
 def healthz():
-    return {"status": "ok", "symbols": settings.holding_symbols}
+    return {"status": "ok"}
 
 
 @app.get("/status")
 def status():
+    chat_ids = settings.known_chat_ids()
     return {
         "dry_run": settings.dry_run,
         "cron_secret_set": bool(settings.cron_secret),
-        "telegram_chat_ids": _allowed_chat_ids(),
-        "holdings_file": str(settings.holdings_path),
-        "symbols": settings.holding_symbols,
+        "telegram_chat_ids": chat_ids,
+        "holdings_dir": str(settings.holdings_dir),
+        "holdings_counts": {cid: len(settings.load_holdings(cid)) for cid in chat_ids},
     }
 
 
@@ -137,9 +133,14 @@ def cron(x_cron_secret: str = Header(default="")):
         raise HTTPException(status_code=403, detail="forbidden")
     if not is_trading_day():
         return {"skipped": True, "reason": "非台股交易日，略過推播"}
-    result = run_pipeline()
-    summary = result["report"].total_pnl if result["report"] else result["message"]
-    return {"sent": result["sent"], "summary": summary}
+    results = {}
+    for chat_id in settings.known_chat_ids():
+        result = run_pipeline(chat_id)
+        results[chat_id] = {
+            "sent": result["sent"],
+            "summary": result["report"].total_pnl if result["report"] else result["message"],
+        }
+    return {"results": results}
 
 
 @app.post("/api/telegram")
@@ -147,7 +148,7 @@ async def telegram_webhook(request: Request):
     payload = await request.json()
     message = payload.get("message") or {}
     chat_id = str(message.get("chat", {}).get("id", ""))
-    allowed = _allowed_chat_ids()
+    allowed = settings.allowed_chat_ids()
     if allowed and chat_id not in allowed:
         raise HTTPException(status_code=403, detail="forbidden")
     text = (message.get("text") or "").strip()
