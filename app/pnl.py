@@ -31,15 +31,19 @@ class PortfolioReport:
 
 
 def _signal(pnl_pct, strategy):
-    take_profit = strategy.get("take_profit_pct", 10)
-    stop_loss = strategy.get("stop_loss_pct", -5)
-    sell_batch = strategy.get("sell_batch_pct", 0.5)
+    take_profit = float(strategy.get("take_profit_pct", 10))
+    stop_loss = float(strategy.get("stop_loss_pct", -8))
+    sell_batch = float(strategy.get("sell_batch_pct", 0.5))
+    buy_more_pct = float(strategy.get("buy_more_pct", -3))
+    buy_more_max_pct = float(strategy.get("buy_more_max_pct", -15))
 
     if pnl_pct >= take_profit:
-        return "建議分批獲利了結", f"達 +{take_profit}%，建議賣出約 {sell_batch * 100:.0f}% 部位"
+        return "建議分批獲利了結", f"達 +{take_profit:g}%，建議賣出約 {sell_batch * 100:.0f}% 部位"
     if pnl_pct <= stop_loss:
-        return "建議停損", f"跌破 {stop_loss}%，建議優先控制風險"
-    return "持有", "未達停利/停損門檻，可繼續持有"
+        return "建議停損", f"跌破 {stop_loss:g}%，建議優先控制風險"
+    if pnl_pct <= buy_more_pct and pnl_pct >= buy_more_max_pct:
+        return "建議觀察加碼", f"較成本 {pnl_pct:+.2f}%，達加碼觀察門檻 {buy_more_pct:g}%（未達停損 {stop_loss:g}%）"
+    return "持有", "未達加碼/停利/停損門檻，可繼續持有"
 
 
 def calculate_position(item, price, strategy):

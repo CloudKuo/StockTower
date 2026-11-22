@@ -5,7 +5,13 @@ PORTFOLIO = [
     {"symbol": "2330", "name": "台積電", "shares": 1000, "avg_cost": 580.0},
     {"symbol": "2409", "name": "友達", "shares": 2000, "avg_cost": 18.5},
 ]
-STRATEGY = {"take_profit_pct": 10, "stop_loss_pct": -5, "sell_batch_pct": 0.5}
+STRATEGY = {
+    "take_profit_pct": 10,
+    "stop_loss_pct": -8,
+    "sell_batch_pct": 0.5,
+    "buy_more_pct": -3,
+    "buy_more_max_pct": -15,
+}
 
 
 def test_profit_position():
@@ -30,6 +36,12 @@ def test_loss_position():
 def test_hold_signal():
     pos = calculate_position(PORTFOLIO[0], 590.0, STRATEGY)
     assert pos.signal == "持有"
+
+
+def test_buy_more_signal():
+    strategy = {**STRATEGY, "buy_more_pct": -3, "buy_more_max_pct": -15, "stop_loss_pct": -8}
+    pos = calculate_position(PORTFOLIO[0], 555.0, strategy)  # ~-4.7%
+    assert pos.signal == "建議觀察加碼"
 
 
 def test_analyze_portfolio_totals():

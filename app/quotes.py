@@ -1,50 +1,37 @@
-import base64
 from hashlib import sha256
-from pathlib import Path
 
-from fubon_neo.sdk import FubonSDK
+import requests
 
-PRICE_FIELDS = ("lastPrice", "closePrice", "referencePrice", "previousClose")
-
+PRICE_FIELDS = ("z", "y", "o", "h", "l")
 MOCK_FACTORS = (0.92, 0.98, 1.05, 1.12, 0.88, 1.18)
+TWSE_MIS_URL = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp"
 
 
 class QuoteError(Exception):
     pass
 
 
-def _as_dict(value):
-    return value if isinstance(value, dict) else {}
+def _to_float(value):
+    try:
+        if value in (None, "", "-", "--", "---"):
+            return None
+        price = float(str(value).replace(",", ""))
+        return price if price > 0 else None
+    except (TypeError, ValueError):
+        return None
 
 
-def _extract_price(result):
-    if not isinstance(result, dict):
-        result = _as_dict(getattr(result, "data", None))
-    candidates = [result]
-    for key in ("quote", "data", "intraday"):
-        child = result.get(key)
-        if isinstance(child, dict):
-            candidates.append(child)
-    for field in PRICE_FIELDS:
-        for candidate in candidates:
-            value = candidate.get(field)
-            if value is not None:
-                try:
-                    price = float(value)
-                    if price > 0:
-                        return price
-                except (TypeError, ValueError):
-                    continue
+def _extract_price(msg):
+    if not isinstance(msg, dict):
+        return None
+    for field in ("z", "pz", "b", "a", "y"):
+        raw = msg.get(field)
+        if field in ("b", "a") and isinstance(raw, str):
+            raw = raw.split("_")[0]
+        price = _to_float(raw)
+        if price is not None:
+            return price
     return None
-
-
-def _ensure_cert(cert_b64, cert_path):
-    path = Path(cert_path)
-    if path.exists() and path.stat().st_size > 0:
-        return
-    if not cert_b64:
-        raise QuoteError("FUBON_CERT_B64 未設定（憑證需以 base64 存放在環境變數）")
-    path.write_bytes(base64.b64decode(cert_b64))
 
 
 def _mock_prices(portfolio):
@@ -59,52 +46,43 @@ def _mock_prices(portfolio):
     return prices
 
 
-def get_prices(portfolio, credentials, dry_run=False):
+def _query_twse(symbols):
+    ex_ch = "|".join(f"tse_{s}.tw|otc_{s}.tw" for s in symbols)
+    resp = requests.get(
+        TWSE_MIS_URL,
+        params={"ex_ch": ex_ch, "json": "1", "delay": "0"},
+        timeout=10,
+        headers={"User-Agent": "StockTower/1.0"},
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    msgs = data.get("msgArray") or []
+    by_symbol = {}
+    for msg in msgs:
+        code = str(msg.get("c") or msg.get("ch", "").split(".")[0]).strip()
+        price = _extract_price(msg)
+        if code and price is not None:
+            by_symbol[code] = price
+    return by_symbol
+
+
+def get_prices(portfolio, dry_run=False):
     if dry_run:
         return _mock_prices(portfolio)
 
-    required = {
-        "FUBON_ID": credentials["FUBON_ID"],
-        "FUBON_CERT_PASS": credentials["FUBON_CERT_PASS"],
-    }
-    missing = [name for name, value in required.items() if not value]
-    if not credentials.get("FUBON_PASSWORD") and not credentials.get("FUBON_API_KEY"):
-        missing.append("FUBON_PASSWORD 或 FUBON_API_KEY")
-    if missing:
-        raise QuoteError(f"{', '.join(missing)} 未設定")
+    symbols = [str(item["symbol"]).strip() for item in portfolio if item.get("symbol")]
+    if not symbols:
+        return {}
 
-    cert_path = credentials["FUBON_CERT_PATH"] or "/tmp/fubon_cert.pfx"
-    _ensure_cert(credentials["FUBON_CERT_B64"], cert_path)
+    try:
+        by_symbol = _query_twse(symbols)
+    except Exception as exc:
+        raise QuoteError(f"公開報價查詢失敗：{exc}") from exc
 
-    sdk = FubonSDK()
-    if credentials.get("FUBON_PASSWORD"):
-        result = sdk.login(
-            credentials["FUBON_ID"],
-            credentials["FUBON_PASSWORD"],
-            cert_path,
-            credentials["FUBON_CERT_PASS"],
-        )
-    else:
-        result = sdk.apikey_login(
-            credentials["FUBON_ID"],
-            credentials["FUBON_API_KEY"],
-            cert_path,
-            credentials["FUBON_CERT_PASS"],
-        )
-    if not result or not getattr(result, "is_success", False):
-        message = getattr(result, "message", None) or "無回傳帳戶"
-        raise QuoteError(f"富邦登入失敗：{message}")
-
-    sdk.init_realtime()
-    stock = sdk.marketdata.rest_client.stock
-
-    symbols = [item["symbol"] for item in portfolio]
     prices = {}
     for symbol in symbols:
-        try:
-            result = stock.intraday.quote(symbol=symbol)
-            prices[symbol] = _extract_price(result)
-        except Exception as exc:
-            prices[symbol] = None
-            print(f"取得 {symbol} 報價失敗: {exc}")
+        price = by_symbol.get(symbol)
+        if price is None:
+            print(f"取得 {symbol} 報價失敗: 無有效價格")
+        prices[symbol] = price
     return prices

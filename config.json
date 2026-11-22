@@ -1,24 +1,13 @@
 {
   "telegram": {
-    "push_schedule": ["09:05", "11:30", "13:35"]
+    "push_schedule": ["09:05"]
   },
-  "portfolio": [
-    {
-      "symbol": "2330",
-      "name": "台積電",
-      "shares": 1000,
-      "avg_cost": 580.0
-    },
-    {
-      "symbol": "2409",
-      "name": "友達",
-      "shares": 2000,
-      "avg_cost": 18.5
-    }
-  ],
+  "holdings_file": "data/holdings.json",
   "strategy": {
     "take_profit_pct": 10,
-    "stop_loss_pct": -5,
-    "sell_batch_pct": 0.5
+    "stop_loss_pct": -8,
+    "sell_batch_pct": 0.5,
+    "buy_more_pct": -3,
+    "buy_more_max_pct": -15
   }
 }

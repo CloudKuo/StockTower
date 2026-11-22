@@ -14,33 +14,76 @@ SELL_FEE_RATE = 0.001425
 SELL_TAX_RATE = 0.003
 MIN_FEE = 20
 
+DEFAULT_STRATEGY = {
+    "take_profit_pct": 10,
+    "stop_loss_pct": -5,
+    "sell_batch_pct": 0.5,
+    "buy_more_pct": -3,
+    "buy_more_max_pct": -15,
+}
+
 
 class Settings:
     def __init__(self, config_path: Path = CONFIG_PATH):
+        self.config_path = config_path
         self.config = json.loads(config_path.read_text(encoding="utf-8"))
-        self.portfolio = self.config["portfolio"]
-        self.strategy = self.config["strategy"]
-        self.push_schedule = self.config.get("telegram", {}).get(
-            "push_schedule", ["09:05", "11:30", "13:35"]
+        self.strategy = {**DEFAULT_STRATEGY, **self.config.get("strategy", {})}
+        self.push_schedule = self.config.get("telegram", {}).get("push_schedule", ["09:05"])
+        holdings_file = os.getenv(
+            "HOLDINGS_FILE", self.config.get("holdings_file", "data/holdings.json")
         )
-        self.fubon_id = os.getenv("FUBON_ID", "")
-        self.fubon_api_key = os.getenv("FUBON_API_KEY", "")
-        self.fubon_password = os.getenv("FUBON_PASSWORD", "")
-        self.fubon_cert_path = os.getenv("FUBON_CERT_PATH", "/tmp/fubon_cert.pfx")
-        self.fubon_cert_pass = os.getenv("FUBON_CERT_PASS", "")
-        self.fubon_cert_b64 = os.getenv("FUBON_CERT_B64", "")
+        self.holdings_path = Path(holdings_file)
+        if not self.holdings_path.is_absolute():
+            self.holdings_path = BASE_DIR / self.holdings_path
         self.telegram_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
         self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
         self.cron_secret = os.getenv("CRON_SECRET", "")
-        self.dry_run = os.getenv("DRY_RUN", "").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-        )
+        self.dry_run = os.getenv("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
+
+    @property
+    def portfolio(self):
+        return load_holdings(self.holdings_path)
 
     @property
     def holding_symbols(self):
         return [item["symbol"] for item in self.portfolio]
+
+
+def load_holdings(path: Path):
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    if isinstance(data, dict):
+        data = data.get("portfolio", [])
+    if not isinstance(data, list):
+        return []
+    holdings = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        symbol = str(item.get("symbol", "")).strip()
+        if not symbol:
+            continue
+        holdings.append(
+            {
+                "symbol": symbol,
+                "name": str(item.get("name") or symbol).strip(),
+                "shares": int(float(item.get("shares", 0))),
+                "avg_cost": float(item.get("avg_cost", 0)),
+            }
+        )
+    return holdings
+
+
+def save_holdings(path: Path, holdings):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"portfolio": holdings}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 _settings = None

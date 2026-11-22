@@ -3,7 +3,9 @@ def format_cny(value):
 
 
 def render_report(report):
-    lines = [f"📊 台股即時損益報表（{len(report.positions)} 檔明細）\n"]
+    if not report.positions:
+        return "目前無法取得庫存報價，請稍後再試。"
+    lines = [f"📊 台股庫存日報（{len(report.positions)} 檔）\n"]
     for p in report.positions:
         lines.append(
             f"▫️ {p.name}({p.symbol}) {p.shares:,} 股\n"

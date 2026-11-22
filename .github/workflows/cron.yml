@@ -1,10 +1,8 @@
-name: StockTower 排程推播
+name: StockTower 每日早晨推播
 
 on:
   schedule:
-    - cron: "5 1 * * 1-5"
-    - cron: "30 3 * * 1-5"
-    - cron: "35 5 * * 1-5"
+    - cron: "5 1 * * 1-5" # 09:05 Asia/Taipei
   workflow_dispatch:
 
 jobs:
